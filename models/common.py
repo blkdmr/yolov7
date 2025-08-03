@@ -584,7 +584,7 @@ class RepConv(nn.Module):
     def fuse_repvgg_block(self):    
         if self.deploy:
             return
-        print(f"RepConv.fuse_repvgg_block")
+        #print(f"RepConv.fuse_repvgg_block")
                 
         self.rbr_dense = self.fuse_conv_bn(self.rbr_dense[0], self.rbr_dense[1])
         
@@ -1382,7 +1382,8 @@ class WindowAttention(nn.Module):
         # get pair-wise relative position index for each token inside the window
         coords_h = torch.arange(self.window_size[0])
         coords_w = torch.arange(self.window_size[1])
-        coords = torch.stack(torch.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
+
+        coords = torch.stack(torch.meshgrid([coords_h, coords_w], indexing='ij'))  # 2, Wh, Ww
         coords_flatten = torch.flatten(coords, 1)  # 2, Wh*Ww
         relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww
         relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # Wh*Ww, Wh*Ww, 2
@@ -1698,7 +1699,7 @@ class WindowAttention_v2(nn.Module):
         # get pair-wise relative position index for each token inside the window
         coords_h = torch.arange(self.window_size[0])
         coords_w = torch.arange(self.window_size[1])
-        coords = torch.stack(torch.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
+        coords = torch.stack(torch.meshgrid([coords_h, coords_w], indexing='ij'))  # 2, Wh, Ww
         coords_flatten = torch.flatten(coords, 1)  # 2, Wh*Ww
         relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww
         relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # Wh*Ww, Wh*Ww, 2
