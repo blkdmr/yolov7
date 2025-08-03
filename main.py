@@ -1,8 +1,13 @@
+import sys
+import os
+
+sys.path.insert(0, os.path.abspath("yolov7"))
+
 import cv2
-from utils.datasets import letterbox
-from utils.torch_utils import select_device
-from utils.general import non_max_suppression, scale_coords
-from models.experimental import attempt_load
+from yolov7.utils.datasets import letterbox
+from yolov7.utils.torch_utils import select_device
+from yolov7.utils.general import non_max_suppression, scale_coords
+from yolov7.models.experimental import attempt_load
 from time import sleep
 import numpy as np
 import torch
