@@ -1,9 +1,18 @@
+import sys
+import os
+
+import joblib
+
+sys.path.insert(0, os.path.abspath("yolov7"))
+
+import cv2
 import timm
 import torch
 
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
-
+from yolov7.utils.torch_utils import select_device
+from yolov7.models.experimental import attempt_load
 
 # ========================================================= #
 # Dataset for loading potato images
@@ -14,10 +23,15 @@ from torchvision import transforms
 from torch.utils.data import Dataset
 
 class PotatoDataset(Dataset):
+
     def __init__(self, csv_path, image_dir, transform=None):
         df = pd.read_csv(csv_path)
         self.image_dir = image_dir
         self.transform = transform
+
+        device = select_device('')  # Automatically select GPU or CPU
+        self._model = attempt_load('yolov7/weights/best.pt', map_location=device) # Load the model
+        self._model.eval() # Set model to evaluation mode - e.g. Dropout layers are disabled
 
         # Convert one-hot to class ID
         self.samples = [
@@ -59,23 +73,23 @@ transform = transforms.Compose([
 ])
 
 train_dataset = PotatoDataset(
-    csv_path='dataset/rotten_healthy/train/_classes.csv',
-    image_dir='dataset/rotten_healthy/train',
+    csv_path='dataset/rotten_healthy/prp_train/_classes.csv',
+    image_dir='dataset/rotten_healthy/prp_train',
     transform=transform
 )
 
 train_loader = DataLoader(train_dataset, batch_size=32, shuffle=False)
 
 test_dataset = PotatoDataset(
-    csv_path='dataset/rotten_healthy/test/_classes.csv',
-    image_dir='dataset/rotten_healthy/test',
+    csv_path='dataset/rotten_healthy/prp_test/_classes.csv',
+    image_dir='dataset/rotten_healthy/prp_test',
     transform=transform
 )
 
 test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
-features_list = []
-labels_list = []
+train_features = []
+train_labels = []
 
 with torch.no_grad():
     for imgs, labels in train_loader:
@@ -83,20 +97,11 @@ with torch.no_grad():
         feats = model.forward_features(imgs)
         pooled = feats.mean(dim=[2, 3])  # global average pooling to [B, 2048]
 
-        features_list.append(pooled.cpu())
-        labels_list.append(labels)
+        train_features.append(pooled.cpu())
+        train_labels.append(labels)
 
-
-
-X = torch.cat(features_list).numpy()
-y = torch.cat(labels_list).numpy()
-
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
-
-clf = LogisticRegression(max_iter=1000)
-clf.fit(X, y)
-
+X_train = torch.cat(train_features).numpy()
+y_train = torch.cat(train_labels).numpy()
 
 test_features = []
 test_labels = []
@@ -113,8 +118,17 @@ with torch.no_grad():
 X_test = torch.cat(test_features).numpy()
 y_test = torch.cat(test_labels).numpy()
 
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+
+clf = LogisticRegression(max_iter=1000)
+clf.fit(X_train, y_train)
+
 from sklearn.metrics import accuracy_score, classification_report
 
 test_preds = clf.predict(X_test)
 print(f"Test Accuracy: {accuracy_score(y_test, test_preds):.2%}")
 print(classification_report(y_test, test_preds, target_names=["Healthy", "Rotten"]))
+
+joblib.dump(clf, 'rotten_healthy_classifier.pkl')

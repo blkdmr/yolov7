@@ -3,6 +3,10 @@ import os
 
 sys.path.insert(0, os.path.abspath("yolov7"))
 
+import joblib
+from PIL import Image
+from torchvision import transforms
+import timm
 import cv2
 from yolov7.utils.datasets import letterbox
 from yolov7.utils.torch_utils import select_device
@@ -10,10 +14,11 @@ from yolov7.utils.general import non_max_suppression, scale_coords
 from yolov7.models.experimental import attempt_load
 import numpy as np
 import torch
-import joblib
-import timm
-from torchvision import transforms
-from PIL import Image
+
+def export(cropped_images):
+    os.makedirs('export', exist_ok=True)
+    for i, img in enumerate(cropped_images):
+        cv2.imwrite(f'export/cropped_{i}.png', img)
 
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -22,19 +27,15 @@ transform = transforms.Compose([
 
 classes = ['healthy', 'rotten']
 
-def export(cropped_images):
-    os.makedirs('export', exist_ok=True)
-    for i, img in enumerate(cropped_images):
-        cv2.imwrite(f'export/cropped_{i}.png', img)
-
 if __name__ == "__main__":
 
-    frame = cv2.imread('pot.jpg')
-    image = cv2.imread('pot.jpg')
+    filename = 'multir.jpg'
+    frame = cv2.imread(filename)
+    image = cv2.imread(filename)
 
     device = select_device('') # Automatically select GPU or CPU
 
-    model = attempt_load('weights/best.pt', map_location=device) # Load the model
+    model = attempt_load('yolov7/weights/best.pt', map_location=device) # Load the model
     model.eval() # Set model to evaluation mode - e.g. Dropout layers are disabled
 
     backbone = timm.create_model('resnet50', pretrained=True)
@@ -45,7 +46,7 @@ if __name__ == "__main__":
     for param in backbone.parameters():
         param.requires_grad = False
 
-    clf = joblib.load("resnet50_potato_classifier.joblib")
+    clf = joblib.load("rotten_healthy_classifier.pkl")  # Load the classifier
 
     names = model.names
 
@@ -90,7 +91,6 @@ if __name__ == "__main__":
             x1, y1, x2, y2 = map(int, xyxy)
 
             cropped = image[y1:y2, x1:x2]
-
             # Converti da BGR a RGB
             image_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
 
@@ -105,14 +105,11 @@ if __name__ == "__main__":
             pooled = feats.mean(dim=[2, 3])  # global average pooling to [B, 2048]
 
             health = clf.predict(pooled.cpu().numpy())
-            #cropped_images.append(cropped)
-
             label = f'{classes[health[0]]} {names[class_id]}'# Class and confidence
 
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 1) # Draw rectangle
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 4) # Draw rectangle
             cv2.putText(frame, label, (x1, y1 +10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
-        cv2.imwrite('result.png', frame)
-        #export(cropped_images)
+        cv2.imwrite(f'out_{filename}.jpg', frame)  # Save the output image with detections
     else:
         print("No detections found.")
